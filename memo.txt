@@ -1,0 +1,10 @@
+在Azure UK south Region 创建一个NC48ads_A100_v4 VM，并部署Qwen2.5-14B 模型（FP16）进行推理测试。我已经在terminal AZ login成功，请帮我直接创建所需资源并进行自动测试。
+
+分别部署Qwen2.5-32B-Instruct FP16，INT8精度和Qwen2.5-72B-Instruct FP16，INT8精度的模型并运行相同的测试。
+
+
+
+
+为了让72B模型能跑起来，使用NVMe 缓存，重新优化一下配置。开始测试FP16，INT8。
+
+请帮我继续完成这个TensorRT-LLM 推理qwen 2.5 -14B模型 10K输入，0.8k输出的测试。并将测试结果总结到summarize-dec7.md

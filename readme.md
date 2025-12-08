@@ -17,6 +17,8 @@ This document consolidates every benchmark captured in `summarize-dec5.md`, `sum
 | 2025-12-07 | LMDeploy TurboMind (`tp=2`, `session_len=32768`) | 20k->1k | 18.46 | 27.79 | 513 | `ignore_eos` 后仍在 513 token 提前停止；参见 `summarize-dec6.md` |
 | 2025-12-06 | TensorRT-LLM (`tp=2`) | 10k->0.8k | 35.79 (净推理) / 68.95 (含加载) | 22.36 (净) / 11.60 (含加载) | 800 | 同时列出剔除/包含引擎加载时间；参见 `summarize-dec6.md` |
 | 2025-12-07 | LMDeploy TurboMind (`tp=2`) | 10k->0.8k | 15.50 | 32.25 | 500 | 缩短 prompt，解码在 500 token 停止；参见 `summarize-dec7.md` |
+| 2025-12-08 | vLLM (`max_model_len=20480`, 本地 snapshot) | 10k->0.8k | 23.62 | 33.87 | 800 | Hugging Face DNS 故障下改用缓存路径 + offline 模式；参见 `summarize-dec7.md` |
+| 2025-12-08 | DeepSpeed Inference (torchrun ×2 A100) | 10k->0.8k | 83.83 | 9.54 | 800 | 原生 HF + DeepSpeed 0.18.2，多卡基线；参见 `summarize-dec8.md` |
 
 ### Qwen2.5-14B
 | Date | Engine / Config | Prompt->Gen (tokens) | Runtime (s) | Tok/s | Output Tokens | Notes |
@@ -25,6 +27,7 @@ This document consolidates every benchmark captured in `summarize-dec5.md`, `sum
 | 2025-12-07 | LMDeploy TurboMind (`tp=2`) | 10k->0.8k | 7.91 | 48.93 | 387 | `--ignore-eos` 后仍在 387 token 提前停止；参见 `summarize-dec7.md` |
 | 2025-12-07 | vLLM (`gpu_memory_utilization=0.9`) | 10k->0.8k | 11.99 | 66.70 | 800 | 成功生成完整 800 token；参见 `summarize-dec7.md` |
 | 2025-12-07 | TensorRT-LLM (`tp=2`, ctx 10.8k) | 10k->0.8k | 16.93 | 47.25 | 800 | 需将输入改为逐样本 1-D INT32；参见 `summarize-dec7.md` |
+| 2025-12-08 | DeepSpeed Inference (torchrun ×2 A100) | 10k->0.8k | 53.92 | 14.84 | 800 | DNS 修复后运行 DeepSpeed 0.18.2；参见 `summarize-dec8.md` |
 
 ## INT8 Benchmark Snapshot
 | Date | Model | Engine / Config | Prompt->Gen (tokens) | Runtime (s) | Tok/s | Notes |

@@ -1,0 +1,7 @@
+# Local virtual environments
+.venv/
+
+# Downloaded dependency artifacts
+*.whl
+*.tar.gz
+*.tar.gz.b64

@@ -33,6 +33,21 @@
 - 较短上下文仍会提前触发 EOS，可考虑调高 `session_len` 或通过 LMDeploy pipeline 配置停止词（禁用默认 EOS）以逼近完整 800 token 生成。
 - GEMM autotune 依旧不是瓶颈；运行日志仅提示 `gemm_config.in` 缺失，采用默认算法即可。
 
+## Qwen2.5-32B FP16 vLLM Benchmark（10K → 0.8K）
+- 运行环境：`/home/azureuser/vllm-env`（torch 2.9.0、vLLM 0.12.0），沿用双 A100 节点，`CUDA_VISIBLE_DEVICES=0,1`。
+- 启动命令：`python ~/qwen/qwen_multi_benchmark.py --model ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-32B-Instruct/snapshots/5ede1c97bbab6ce5cda5812749b4c0bdf79b18dd --engine vllm --precision FP16 --prompt-tokens 10000 --generated-tokens 800 --tensor-parallel-size 2 --max-model-len 20480 --gpu-memory-utilization 0.9`（设置 `TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=1` 以绕过 Hugging Face DNS 故障）。
+- 输出文件：`/home/azureuser/qwen/results/qwen2_5_32b_fp16_vllm_10k.json`。
+
+### 性能结果
+| 指标 | 数值 |
+| --- | --- |
+| 总耗时 (s) | 23.62 |
+| 吞吐 (tok/s) | 33.87 |
+| 实际生成 tokens | 800 |
+
+- 本地 snapshot 运行确保在 DNS 故障期间仍能加载 tokenizer/权重，`peak_memory_gib` 暂记为 0（后续待补采集）。
+- vLLM 日志显示 Prefill ≈ 424 tok/s、Decode ≈ 33.9 tok/s，整段 10k→0.8k 请求耗时 23.6 s，性能介于 LMDeploy（15.5 s）与 TensorRT（35.8 s 净推理）之间。
+
 ## Qwen2.5-14B FP16 LMDeploy Benchmark（10K → 0.8K）
 - Workspace：`/home/azureuser/qwen/lmdeploy/qwen2_5_14b_tp2`（通过 `scripts/convert_lmdeploy_14b.sh` 以 TP=2 转换）。
 - 运行命令：`scripts/run_lmdeploy_benchmark_14b_10k.sh`（内部沿用统一 `qwen_multi_benchmark.py` 参数集）。

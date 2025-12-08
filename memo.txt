@@ -7,4 +7,21 @@
 
 为了让72B模型能跑起来，使用NVMe 缓存，重新优化一下配置。开始测试FP16，INT8。
 
-请帮我继续完成这个TensorRT-LLM 推理qwen 2.5 -14B模型 10K输入，0.8k输出的测试。并将测试结果总结到summarize-dec7.md
+请帮我继续完成vLLM 推理qwen 2.5 -32B模型 FP16精度，10K输入，0.8k输出的测试。并将测试结果总结到summarize-dec7.md和更新到readme.md的表格里。
+
+
+
+--------------------------------
+那请帮我继续完成vLLM 推理qwen 2.5 -32B模型 FP16精度，10K输入，0.8k输出的测试。并将测试结果总结到summarize-dec7.md和更新到readme.md的表格里。
+az vm run-command invoke --resource-group RG
+-QWEN-UKSOUTH --name vm-qwen-nc48 --command-id RunShellScript --scripts "sud
+o -u azureuser bash -lc 'cd ~/qwen && source ~/vllm-env/bin/activate && expo
+rt CUDA_VISIBLE_DEVICES=0,1 && export TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=
+1 && python qwen_multi_benchmark.py --model /home/azureuser/.cache/huggingfa
+ce/hub/models--Qwen--Qwen2.5-32B-Instruct/snapshots/5ede1c97bbab6ce5cda58127
+49b4c0bdf79b18dd --precision FP16 --engine vllm --prompt-tokens 10000 --gene
+rated-tokens 800 --tensor-parallel-size 2 --max-model-len 20480 --gpu-memory
+-utilization 0.9 --output-json ~/qwen/results/qwen2_5_32b_fp16_vllm_10k.json
+---------------------------------------
+
+az vm run-command invoke --resource-group RG-QWEN-UKSOUTH --name vm-qwen-nc48 --command-id RunShellScript --scripts "python -c \"import json,sys; data=json.load(open('/home/azureuser/qwen/results/qwen2_5_32b_fp16_vllm_10k.json')); json.dump(data, sys.stdout, indent=2)\""

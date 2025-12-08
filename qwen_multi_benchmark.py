@@ -13,6 +13,11 @@ from typing import Dict, List, Optional, Tuple, Union
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
 
+try:  # DeepSpeed-Inference is optional
+    import deepspeed  # type: ignore
+except ImportError:  # pragma: no cover - deepspeed only needed when engine=deepspeed
+    deepspeed = None  # type: ignore[assignment]
+
 try:  # bitsandbytes is optional outside INT8 runs
     from transformers import BitsAndBytesConfig  # type: ignore
 except ImportError:  # pragma: no cover - dependency optional on FP16-only hosts
@@ -208,6 +213,80 @@ def run_benchmark(
 
         peak_memory = collect_peak_memory()
         max_memory_request = model_kwargs.get("max_memory")
+
+    elif engine == "deepspeed":
+        if precision.lower() != "fp16":
+            raise ValueError("DeepSpeed-Inference path currently supports FP16 only in this script")
+        if deepspeed is None:
+            raise RuntimeError("deepspeed package is required when --engine deepspeed")
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA is required for DeepSpeed-Inference runs")
+
+        local_rank = int(
+            os.environ.get(
+                "LOCAL_RANK",
+                os.environ.get("OMPI_COMM_WORLD_LOCAL_RANK", os.environ.get("SLURM_LOCALID", 0)),
+            )
+        )
+        distributed_rank = int(os.environ.get("RANK", os.environ.get("OMPI_COMM_WORLD_RANK", 0)))
+        world_size_env = os.environ.get("WORLD_SIZE") or os.environ.get("OMPI_COMM_WORLD_SIZE") or os.environ.get(
+            "SLURM_NTASKS"
+        )
+        distributed_world_size = int(world_size_env) if world_size_env else max(1, tensor_parallel_size)
+        emit_result = distributed_rank == 0
+
+        torch.cuda.set_device(local_rank)
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+
+        ds_device_map = "cpu" if device_map == "auto" else device_map
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            torch_dtype=torch.float16,
+            trust_remote_code=True,
+            device_map=ds_device_map,
+            low_cpu_mem_usage=True,
+        )
+
+        engine_config = {
+            "mp_size": distributed_world_size,
+            "dtype": torch.float16,
+            "replace_method": "auto",
+            "replace_with_kernel_inject": True,
+        }
+        ds_engine = deepspeed.init_inference(model, **engine_config)
+        ds_model = getattr(ds_engine, "module", ds_engine)
+        ds_model.eval()
+
+        target_device = torch.device(f"cuda:{local_rank}")
+        input_ids_ds = input_ids.to(target_device)
+        attention_mask_ds = attention_mask.to(target_device)
+
+        sync_cuda()
+        start = time.perf_counter()
+        outputs = ds_model.generate(
+            input_ids=input_ids_ds,
+            attention_mask=attention_mask_ds,
+            max_new_tokens=gen_tokens,
+            temperature=0.7,
+            top_p=0.9,
+            do_sample=False,
+        )
+        sync_cuda()
+        elapsed = time.perf_counter() - start
+
+        total_tokens = outputs.shape[-1]
+        new_tokens = total_tokens - prompt_tokens
+        excerpt_tokens = outputs[0][-min(new_tokens, 64) :]
+        excerpt_text = tokenizer.decode(excerpt_tokens, skip_special_tokens=True).strip()
+
+        device_map_serializable = {
+            "engine": "deepspeed-inference",
+            "mp_size": distributed_world_size,
+            "local_rank": local_rank,
+        }
+        peak_memory = collect_peak_memory()
+        max_memory_request = None
 
     elif engine == "vllm":
         if precision.lower() != "fp16":
@@ -407,7 +486,7 @@ def run_benchmark(
         "ignore_eos": ignore_eos,
         "trt_engine_dir": trt_engine_dir,
     }
-    if engine == "trtllm" and distributed_world_size is not None:
+    if engine in {"trtllm", "deepspeed"} and distributed_world_size is not None:
         result["tensor_parallel_size"] = distributed_world_size
     if distributed_rank is not None:
         result["distributed_rank"] = distributed_rank
@@ -432,9 +511,9 @@ def main() -> None:
     parser.add_argument("--low-cpu-mem-usage", action="store_true", help="Activate low_cpu_mem_usage flag")
     parser.add_argument(
         "--engine",
-        choices=["hf", "vllm", "lmdeploy", "trtllm"],
+        choices=["hf", "vllm", "lmdeploy", "trtllm", "deepspeed"],
         default="hf",
-        help="Runtime engine: HuggingFace, vLLM, LMDeploy TurboMind, or TensorRT-LLM",
+        help="Runtime engine: HuggingFace, vLLM, LMDeploy TurboMind, TensorRT-LLM, or DeepSpeed-Inference",
     )
     parser.add_argument(
         "--tensor-parallel-size",
